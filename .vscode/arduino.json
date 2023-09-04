@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:megaADK",
+    "programmer": "avrisp",
+    "sketch": "AUTOMATED BURGER PATTY MACHINE.ino"
+}
