@@ -4,6 +4,7 @@
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 bool refreshScreen = false;
+#include <Debounce.h>
 
 byte enterChar[] = {
     B10000,
@@ -36,7 +37,7 @@ byte slowChar[] = {
 
 // Declaration of LCD Variables
 const int numOfMainScreens = 3;
-const int numOfSettingScreens = 9;
+const int numOfSettingScreens = 8;
 const int numOfTestMenu = 10;
 int currentScreen = 0;
 
@@ -49,35 +50,55 @@ String screens[numOfMainScreens][2] = {
     {"TEST MACHINE", "ENTER TO TEST"}};
 
 String settings[numOfSettingScreens][2] = {
-    {"DISPENSE BUKO", "MIN"},
-    {"SUGAR DISPENSER", "MIN"},
-    {"PUMP", "MIN"},
-    {"CARAMELIZE SUGAR", "MIN"},
-    {"COOKING", "MIN"},
-    {"COOLING", "MIN"},
-    {"DISPENSE COOKER", "MIN"},
-    {"SLICE INTERVAL TIME", "SEC"},
-    {"SAVE SETTINGS", "ENTER TO SAVE"}};
+    {"DISPENSER 1", "SEC"},
+    {"DISPENSER 2", "SEC"},
+    {"DISPENSER 3", "SEC"},
+    {"PUMP", "SEC"},
+    {"MIXING", "MIN"},
+    {"DISPENSE FROM MIXER", "MIN"},
+    {"DISPENSE MIXTURE", "SEC"},
+    {"BACK TO MAIN", "ENTER"}};
 
 String TestMenuScreen[numOfTestMenu] = {
-    "BUKO DISPENSER",
-    "SUGAR DISPENSER",
+    "DISPENSER 1",
+    "DISPENSER 2",
+    "DISPENSER 3",
     "PUMP",
-    "MIXER COOKER",
-    "HEATER",
+    "MIXER",
     "LINEAR",
-    "EXTRUDER",
-    "CUTTER",
+    "DISPENSER MIXTURE",
+    "PNEUMATIC",
     "CONVEYOR",
     "Back to Main Menu"};
 
-double parametersTimer[numOfSettingScreens] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
-double parametersTimerMaxValue[numOfSettingScreens] = {1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200};
+int parametersTimer[numOfSettingScreens] = {1, 1, 1, 1, 1, 1,1,1};
+int parametersTimerMaxValue[numOfSettingScreens] = {1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200};
+
+int highestValueToDisplay;
 
 bool settingsFlag = false;
 bool settingEditTimerFlag = false;
 bool runAutoFlag = false;
 bool testMenuFlag = false;
+
+int largest()
+{
+    int firstFour[4];
+
+    for (int i = 0; i < 4; i++) {
+        firstFour[i] = parametersTimer[i];
+    }
+
+    int maxValue = parametersTimer[0];
+    highestValueToDisplay = 0;
+
+    for (int i = 1; i < 4; i++) {
+        if (parametersTimer[i] > maxValue) {
+            maxValue = parametersTimer[i]; // Update maxValue if a larger value is found
+            highestValueToDisplay = i;
+        }
+    }
+}
 
 // Motor
 #include "control.h"
@@ -110,94 +131,126 @@ const long interval2 = 100; // interval at which to blink (milliseconds)
 unsigned long currentMillis2 = 0;
 
 // Stepper Variables
-int ena1 = A10;
-int dir1 = A11;
-int step1 = A12;
+int ena1 = 22;
+int dir1 = 23;
+int step1 = 24;
+int ena2 = 25;
+int dir2 = 26;
+int step2 = 27;
+
 long currentPos1 = 0;
 long lastPos1 = 0;
 long speedStep1 = 8000;
 long moveStep1 = 8000;
 
 // MOTOR DECLARATION
-Control BukoDispenser(38, 100, 100);
-Control SugarTimer(100, 100, 100);
-Control Pump(46, 100, 100);
+Control Mixer(39, 100, 100);
+Control Pneumatic(40, 100, 100);
+Control Dispenser1(100, 100, 100);
+Control Dispenser2(100, 100, 100);
+Control Dispenser3(43, 100, 100);
+Control Pump(42, 100, 100);
+Control Linear(45, 100, 100);
+Control Extruder(47, 100, 100);
+Control Conveyor(46, 100, 100);
+Control DropTimer(100,100,100);
 
-Control Mixer(47, 100, 100);
-Control Heater(37, 35, 100);
 
-Control CookingTimer1(100, 100, 100);
-Control CookingTimer2(100, 100, 100);
-Control CoolingTimer(100, 100, 100);
 
-Control Linear(36, 100, 100);
-
-Control Extruder(41, 100, 100);
-Control Conveyor(42, 100, 100);
-Control TimerCutterDelay(101, 101, 101);
-Control Cutter(34, 100, 100);
-
-AccelStepper SugarDispenser(AccelStepper::FULL2WIRE, dir1, step1);
+AccelStepper Dispenser1Stepper(AccelStepper::FULL2WIRE, dir1, step1);
+AccelStepper Dispenser2Stepper(AccelStepper::FULL2WIRE, dir2, step2);
 void setDispenser()
 {
-    SugarDispenser.setEnablePin(ena1);
-    SugarDispenser.setPinsInverted(false, false, false);
-    SugarDispenser.setMaxSpeed(speedStep1);
-    SugarDispenser.setSpeed(speedStep1);
-    SugarDispenser.setAcceleration(speedStep1 * 200);
-    SugarDispenser.enableOutputs();
-    lastPos1 = SugarDispenser.currentPosition();
+    Dispenser1Stepper.setEnablePin(ena1);
+    Dispenser1Stepper.setPinsInverted(false, false, false);
+    Dispenser1Stepper.setMaxSpeed(speedStep1);
+    Dispenser1Stepper.setSpeed(speedStep1);
+    Dispenser1Stepper.setAcceleration(speedStep1 * 200);
+    Dispenser1Stepper.enableOutputs();
+
+    Dispenser2Stepper.setEnablePin(ena2);
+    Dispenser2Stepper.setPinsInverted(false, false, false);
+    Dispenser2Stepper.setMaxSpeed(speedStep1);
+    Dispenser2Stepper.setSpeed(speedStep1);
+    Dispenser2Stepper.setAcceleration(speedStep1 * 200);
+    Dispenser2Stepper.enableOutputs();
 }
+
+
 
 void DisableSteppers()
 {
-    SugarDispenser.disableOutputs();
+    Dispenser1Stepper.disableOutputs();
+    Dispenser2Stepper.disableOutputs();
 }
 void EnableSteppers()
 {
-    SugarDispenser.enableOutputs();
+    Dispenser1Stepper.enableOutputs();
+    Dispenser2Stepper.enableOutputs();
 }
 
-void RunSugarDispenser()
+void RunDispenser1Stepper()
 {
-    if (SugarDispenser.distanceToGo() == 0)
+    if (Dispenser1Stepper.distanceToGo() == 0)
     {
-        SugarDispenser.setCurrentPosition(0);
-        SugarDispenser.move(moveStep1);
+        Dispenser1Stepper.setCurrentPosition(0);
+        Dispenser1Stepper.move(moveStep1);
     }
 }
 
-int dispenseBukoTimeAdd = 10;
-int sugarDispenseTimeAdd = 20;
-int pumpTimeAdd = 30;
-int cookingTime1TimeAdd = 40;
-int cookingTime2TimeAdd = 50;
-int coolingTimeAdd = 60;
-int dispenseCookerTimeAdd = 70;
-int sliceIntervalTimeAdd = 80;
+void RunDispenser2Stepper()
+{
+    if (Dispenser2Stepper.distanceToGo() == 0)
+    {
+        Dispenser2Stepper.setCurrentPosition(0);
+        Dispenser2Stepper.move(moveStep1);
+    }
+}
+
+bool TestRunDispenser1, TestRunDispenser2 = false;
+void TestRun(){
+    if (TestRunDispenser1 == true)
+    {
+        Dispenser1Stepper.run();
+        RunDispenser1Stepper();
+    }
+    
+    if (TestRunDispenser2 == true)
+    {
+        Dispenser2Stepper.run();
+        RunDispenser2Stepper();
+    }
+}
+
+int mixTimeAdd = 10;
+int dispense1TimeAdd = 20;
+int dispense2TimeAdd = 30;
+int dispense3TimeAdd = 40;
+int pumpTimeAdd = 50;
+int linearTimeAdd = 60;
+int extruderTimeAdd = 70;
 
 void saveSettings()
 {
-    EEPROM.updateDouble(dispenseBukoTimeAdd, parametersTimer[0]);
-    EEPROM.updateDouble(sugarDispenseTimeAdd, parametersTimer[1]);
-    EEPROM.updateDouble(pumpTimeAdd, parametersTimer[2]);
-    EEPROM.updateDouble(cookingTime1TimeAdd, parametersTimer[3]);
-    EEPROM.updateDouble(cookingTime2TimeAdd, parametersTimer[4]);
-    EEPROM.updateDouble(coolingTimeAdd, parametersTimer[5]);
-    EEPROM.updateDouble(dispenseCookerTimeAdd, parametersTimer[6]);
-    EEPROM.updateDouble(sliceIntervalTimeAdd, parametersTimer[7]);
+    EEPROM.updateDouble(dispense1TimeAdd, parametersTimer[0]);
+    EEPROM.updateDouble(dispense2TimeAdd, parametersTimer[1]);
+    EEPROM.updateDouble(dispense3TimeAdd, parametersTimer[2]);
+    EEPROM.updateDouble(pumpTimeAdd, parametersTimer[3]);
+    EEPROM.updateDouble(mixTimeAdd, parametersTimer[4]);
+    EEPROM.updateDouble(linearTimeAdd, parametersTimer[5]);
+    EEPROM.updateDouble(extruderTimeAdd, parametersTimer[6]);
+
 }
 
 void loadSettings()
 {
-    parametersTimer[0] = EEPROM.readDouble(dispenseBukoTimeAdd);
-    parametersTimer[1] = EEPROM.readDouble(sugarDispenseTimeAdd);
-    parametersTimer[2] = EEPROM.readDouble(pumpTimeAdd);
-    parametersTimer[3] = EEPROM.readDouble(cookingTime1TimeAdd);
-    parametersTimer[4] = EEPROM.readDouble(cookingTime2TimeAdd);
-    parametersTimer[5] = EEPROM.readDouble(coolingTimeAdd);
-    parametersTimer[6] = EEPROM.readDouble(dispenseCookerTimeAdd);
-    parametersTimer[7] = EEPROM.readDouble(sliceIntervalTimeAdd);
+    parametersTimer[0] = EEPROM.readDouble(dispense1TimeAdd);
+    parametersTimer[1] = EEPROM.readDouble(dispense2TimeAdd);
+    parametersTimer[2] = EEPROM.readDouble(dispense3TimeAdd);
+    parametersTimer[3] = EEPROM.readDouble(pumpTimeAdd);
+    parametersTimer[4] = EEPROM.readDouble(mixTimeAdd);
+    parametersTimer[5] = EEPROM.readDouble(linearTimeAdd);
+    parametersTimer[6] = EEPROM.readDouble(extruderTimeAdd);
 }
 
 char *secondsToHHMMSS(int total_seconds)
@@ -217,83 +270,50 @@ char *secondsToHHMMSS(int total_seconds)
 
 void setTimer()
 {
-    BukoDispenser.setTimer(secondsToHHMMSS(parametersTimer[0]*60));
-    SugarTimer.setTimer(secondsToHHMMSS(parametersTimer[1]*60));
-    Pump.setTimer(secondsToHHMMSS(parametersTimer[2]*60));
-    CookingTimer1.setTimer(secondsToHHMMSS(parametersTimer[3] * 60));
-    CookingTimer2.setTimer(secondsToHHMMSS(parametersTimer[4] * 60));
-    CoolingTimer.setTimer(secondsToHHMMSS(parametersTimer[5] * 60));
-    Linear.setTimer(secondsToHHMMSS(parametersTimer[6] * 60));
-    TimerCutterDelay.setTimer(secondsToHHMMSS(parametersTimer[7]));
+    Dispenser1.setTimer(secondsToHHMMSS(parametersTimer[0]));
+    Dispenser2.setTimer(secondsToHHMMSS(parametersTimer[1]));
+    Dispenser3.setTimer(secondsToHHMMSS(parametersTimer[2]));
+    Pump.setTimer(secondsToHHMMSS(parametersTimer[3]));
+    Mixer.setTimer(secondsToHHMMSS(parametersTimer[4] * 60));
+    Linear.setTimer(secondsToHHMMSS(parametersTimer[5] * 60));
+    Extruder.setTimer(secondsToHHMMSS(parametersTimer[6]));
 }
 
-bool testRunCut, testSugarDispenser = false;
 void runAllTest()
 {
 
-    if (testRunCut == true)
-    {
-        RunCut();
-    }
-
-    if (testSugarDispenser == true)
-    {
-        SugarDispenser.run();
-        RunSugarDispenser();
-    }
 }
 
 int RunAutoCommand = 0;
-int cutStat = 0;
-
+int DispensePattyStat = 0;
+bool initialMoveConveyor = false;
 /*
-1 - Dispense Sugar (Heat and Mixer On)
-2 - Dispense Water (Heat and Mixer On)
-3 - Cook 1 (Heat and Mixer On)
-4 - Dispense Buko (Heat and Mixer On)
-5 - Cook 2 (Heat and Mixer On)
-6 - Cooling
-7 - Dispense to Extruder (Mixer On)
-8 - Extrude
+1 - Dispense Ingre
+2 - Mix
+3 - Dispense from mixer to Extruder
+4 - Patty Making
 */
 
 void runAutoFunc()
 {
+    ReadSensor();
     switch (RunAutoCommand)
     {
     case 1:
-        RunDispenseWater();
-
+        RunMixAndDispense();
         break;
 
     case 2:
-        RunDispenseSugar();
+        RunMix();
         break;
 
     case 3:
-        RunCook1();
+        RunDispenseFromMixer();
         break;
 
     case 4:
-        RunDispenseBuko();
+RunExtrudeToMould();
         break;
-
-    case 5:
-        RunCook2();
-        break;
-
-    case 6:
-        RunCooling();
-        break;
-
-    case 7:
-        RunDispenseToExtruder();
-        break;
-
-    case 8:
-        RunExtrude();
-        break;
-
     default:
         runAutoFlag = false;
         stopAll();
@@ -301,168 +321,151 @@ void runAutoFunc()
     }
 }
 
-void RunDispenseSugar()
-{
-    SugarTimer.run();
-    Heater.relayOn();
-  //  Mixer.relayOn();
-    SugarDispenser.run();
-    if (SugarTimer.isTimerCompleted() == true)
-    {
-        RunAutoCommand = 3;
-        CookingTimer1.start();
-        DisableSteppers();
-    }
-    else
-    {
-        RunSugarDispenser();
-    }
-}
-
-void RunDispenseWater()
-{
+void RunMixAndDispense(){
+    Dispenser1.run();
+    Dispenser2.run();
+    Dispenser3.run();
     Pump.run();
-    Heater.relayOn();
-    //Mixer.relayOn();
-    if (Pump.isTimerCompleted() == true)
+    Mixer.relayOn();
+    Dispenser1Stepper.run();
+    Dispenser2Stepper.run();
+    if (Dispenser1.isTimerCompleted() == true && Dispenser2.isTimerCompleted() == true  && Dispenser3.isTimerCompleted() == true && Pump.isTimerCompleted() == true )
     {
         RunAutoCommand = 2;
-        SugarTimer.start();
-        EnableSteppers();
+        Mixer.start();
+    }
+    if(Dispenser1.isTimerCompleted() == false){
+        RunDispenser1Stepper();
+    }
+    if(Dispenser2.isTimerCompleted() == false){
+        RunDispenser2Stepper();
     }
 }
 
-void RunCook1()
-{
-    CookingTimer1.run();
-    Heater.relayOn();
-   // Mixer.relayOn();
-    if (CookingTimer1.isTimerCompleted() == true)
+void RunMix(){
+    Mixer.run();
+    if (Mixer.isTimerCompleted() == true)
     {
-        RunAutoCommand = 4;
-        BukoDispenser.start();
-    }
-}
-
-void RunDispenseBuko()
-{
-    BukoDispenser.run();
-    Heater.relayOn();
-   // Mixer.relayOn();
-    if (BukoDispenser.isTimerCompleted() == true)
-    {
-        RunAutoCommand = 5;
-        CookingTimer2.start();
-    }
-}
-
-void RunCook2()
-{
-    CookingTimer2.run();
-    Heater.relayOn();
-   // Mixer.relayOn();
-    if (CookingTimer2.isTimerCompleted() == true)
-    {
-        RunAutoCommand = 6;
-        CoolingTimer.start();
-    }
-}
-
-void RunCooling()
-{
-    CoolingTimer.run();
-    Heater.relayOff();
-   // Mixer.relayOn();
-    if (CoolingTimer.isTimerCompleted() == true)
-    {
-        RunAutoCommand = 7;
+        RunAutoCommand = 3;
         Linear.start();
     }
 }
 
-void RunDispenseToExtruder()
-{
+void RunDispenseFromMixer(){
     Linear.run();
     Mixer.relayOn();
     if (Linear.isTimerCompleted() == true)
     {
-        RunAutoCommand = 8;
         Mixer.relayOff();
-        TimerCutterDelay.start();
+        RunAutoCommand = 4;
+        DispensePattyStat = 1;
     }
 }
 
-void stopAll()
+const int pinSen1 = A0;
+const int pinSen2 = A1;
+Debounce TraySen(pinSen1, 100, true);
+
+bool SenStat1 = false;
+void initSensors()
 {
+    pinMode(pinSen1, INPUT_PULLUP);
 
-    RunAutoCommand = 0;
-    runAutoFlag = false;
-
-    BukoDispenser.stop();
-    SugarTimer.stop();
-    Pump.stop();
-
-    Mixer.stop();
-    Heater.stop();
-
-    CookingTimer1.stop();
-    CookingTimer2.stop();
-    CoolingTimer.stop();
-
-    Linear.stop();
-
-    Extruder.stop();
-    Conveyor.stop();
-    TimerCutterDelay.stop();
-    Cutter.stop();
-    cutStat = 0;
-    DisableSteppers();
+}
+void ReadSensor()
+{
+    SenStat1 = TraySen.read();
 }
 
-void RunExtrude()
-{
-    RunCut();
-    Conveyor.relayOn();
-    Extruder.relayOn();
-}
 
-void RunCut()
-{
-    switch (cutStat)
+
+/*
+1 - Move Conveyor
+2 - Dispense 1
+3 - Dispense 2
+*/
+
+void RunExtrudeToMould(){
+    switch (DispensePattyStat)
     {
-    case 0:
-        TimerCutterDelay.run();
-        if (TimerCutterDelay.isTimerCompleted() == true)
+    case 1:
+        if (initialMoveConveyor == true)
         {
-            currentMillis2 = millis();
-            previousMillis2 = currentMillis2;
-            cutStat = 1;
+            if (SenStat1 == true)
+            {
+                Conveyor.relayOn();
+            }
+            else
+            {
+                initialMoveConveyor = false;
+            }
+        }
+        else
+        {
+            if (SenStat1 == true)
+            {
+                Conveyor.relayOff();
+                Extruder.start();
+                DispensePattyStat = 2;
+            }
+            else
+            {
+                Conveyor.relayOn();
+            }
         }
         break;
-    case 1:
-        cutterCutRun();
+    case 2:
+        RunDispense1();
+        break;
+    case 3:
+        RunDispense2();
         break;
     default:
         break;
     }
 }
 
-void cutterCutRun()
+void RunDispense1()
 {
-    currentMillis2 = millis();
-    if (currentMillis2 - previousMillis2 >= interval2)
+    Extruder.run();
+    if (Extruder.isTimerCompleted() == true)
     {
-        // save the last time you blinked the LED
-        previousMillis2 = currentMillis2;
-        Cutter.relayOff();
-        TimerCutterDelay.start();
-        cutStat = 0;
-    }
-    else
-    {
-        Cutter.relayOn();
+        Pneumatic.relayOn();
+        delay(2000);
+        DispensePattyStat = 3;
+        Extruder.start();
     }
 }
+
+void RunDispense2()
+{
+    Extruder.run();
+    if (Extruder.isTimerCompleted() == true)
+    {
+        Pneumatic.relayOff();
+        delay(2000);
+        initialMoveConveyor = true;
+        DispensePattyStat = 1;
+    }
+}
+
+void stopAll()
+{
+    Mixer.stop();
+    Pneumatic.stop();
+    Dispenser1.stop();
+    Dispenser2.stop();
+    Dispenser3.stop();
+    Pump.stop();
+    Linear.stop();
+    Extruder.stop();
+    Conveyor.stop();
+    DropTimer.stop();
+    RunAutoCommand = 0;
+    runAutoFlag = false;
+    DisableSteppers();
+}
+
 
 // Functions for Rotary Encoder
 void timerIsr()
@@ -498,21 +501,6 @@ void readButtonEncoder()
         case ClickEncoder::Clicked:
             middle = true;
             break;
-
-        case ClickEncoder::DoubleClicked:
-            refreshScreen = 1;
-            if (settingsFlag)
-            {
-                if (fastScroll == false)
-                {
-                    fastScroll = true;
-                }
-                else
-                {
-                    fastScroll = false;
-                }
-            }
-            break;
         }
     }
 }
@@ -535,14 +523,7 @@ void inputCommands()
                 }
                 else
                 {
-                    if (fastScroll == true)
-                    {
                         parametersTimer[currentSettingScreen] += 1;
-                    }
-                    else
-                    {
-                        parametersTimer[currentSettingScreen] += 0.1;
-                    }
                 }
             }
             else
@@ -596,14 +577,7 @@ void inputCommands()
                 }
                 else
                 {
-                    if (fastScroll == true)
-                    {
                         parametersTimer[currentSettingScreen] -= 1;
-                    }
-                    else
-                    {
-                        parametersTimer[currentSettingScreen] -= 0.1;
-                    }
                 }
             }
             else
@@ -655,6 +629,7 @@ void inputCommands()
                 saveSettings();
                 loadSettings();
                 setTimer();
+                largest();
                 currentSettingScreen = 0;
             }
             else
@@ -682,29 +657,38 @@ void inputCommands()
             }
             else if (currentTestMenuScreen == 0)
             {
-                if (BukoDispenser.getMotorState() == true)
-                {
-                    BukoDispenser.relayOff();
+                if(TestRunDispenser1 == false){
+                    TestRunDispenser1 = true;
+                    Dispenser1Stepper.enableOutputs();
+                    Dispenser1Stepper.move(moveStep1);
+                }else{
+                    TestRunDispenser1 = false;
+                    Dispenser1Stepper.enableOutputs();
                 }
-                else
-                {
-                    BukoDispenser.relayOn();
-                }
-            }
+            } 
             else if (currentTestMenuScreen == 1)
             {
-                if (testSugarDispenser == true)
-                {
-                    testSugarDispenser = false;
-                    DisableSteppers();
-                }
-                else
-                {
-                    testSugarDispenser = true;
-                    EnableSteppers();
+                if(TestRunDispenser2 == false){
+                    TestRunDispenser2 = true;
+                    Dispenser2Stepper.enableOutputs();
+                    Dispenser2Stepper.move(moveStep1);
+                }else{
+                    TestRunDispenser2 = false;
+                    Dispenser2Stepper.enableOutputs();
                 }
             }
             else if (currentTestMenuScreen == 2)
+            {
+                if (Dispenser3.getMotorState() == true)
+                {
+                    Dispenser3.relayOff();
+                }
+                else
+                {
+                    Dispenser3.relayOn();
+                }
+            }
+            else if (currentTestMenuScreen == 3)
             {
                 if (Pump.getMotorState() == true)
                 {
@@ -715,7 +699,7 @@ void inputCommands()
                     Pump.relayOn();
                 }
             }
-            else if (currentTestMenuScreen == 3)
+            else if (currentTestMenuScreen == 4)
             {
                 if (Mixer.getMotorState() == true)
                 {
@@ -724,17 +708,6 @@ void inputCommands()
                 else
                 {
                     Mixer.relayOn();
-                }
-            }
-            else if (currentTestMenuScreen == 4)
-            {
-                if (Heater.getMotorState() == true)
-                {
-                    Heater.relayOff();
-                }
-                else
-                {
-                    Heater.relayOn();
                 }
             }
             else if (currentTestMenuScreen == 5)
@@ -761,15 +734,13 @@ void inputCommands()
             }
             else if (currentTestMenuScreen == 7)
             {
-                if (testRunCut == true)
+                if (Pneumatic.getMotorState() == true)
                 {
-                    testRunCut = false;
+                    Pneumatic.relayOff();
                 }
                 else
                 {
-                    testRunCut = true;
-                    TimerCutterDelay.start();
-                    cutStat = 0;
+                    Pneumatic.relayOn();
                 }
             }
             else if (currentTestMenuScreen == 8)
@@ -795,6 +766,10 @@ void inputCommands()
                 runAutoFlag = true;
                 // Insert Commands for Run Auto
                 Pump.start();
+                Dispenser1.start();
+                Dispenser2.start();
+                Dispenser3.start();
+                EnableSteppers();
                 RunAutoCommand = 1;
                 refreshScreen = 1;
             }
@@ -811,10 +786,12 @@ void PrintRunAuto(String job, char *time)
     lcd.clear();
     lcd.print("Running Auto");
     lcd.setCursor(0, 1);
-    lcd.print("Status: " + job);
+    lcd.print("Status: ");
     lcd.setCursor(0, 2);
+    lcd.print(job);
+    lcd.setCursor(0, 3);
     lcd.print("Timer: ");
-    lcd.setCursor(7, 2);
+    lcd.setCursor(7, 3);
     lcd.print(time);
 }
 
@@ -851,55 +828,41 @@ void printScreen()
                 lcd.print("ENTER TO SAVE");
             }
             lcd.setCursor(19, 3);
-            if (fastScroll == true)
-            {
-                lcd.write(1);
-            }
-            else
-            {
-                lcd.write(2);
-            }
         }
     }
     else if (runAutoFlag == true)
     {
-        if (runAutoFlag == true && RunAutoCommand == 2)
+        if (runAutoFlag == true && RunAutoCommand == 1)
         {
-            PrintRunAuto("Sugar", SugarTimer.getTimeRemaining());
+            if(highestValueToDisplay == 0){
+                PrintRunAuto("DISPENSING INGRE", Dispenser1.getTimeRemaining());
+            }else if(highestValueToDisplay == 1){
+                PrintRunAuto("DISPENSING INGRE", Dispenser2.getTimeRemaining());
+            }else if(highestValueToDisplay == 2){
+                PrintRunAuto("DISPENSING INGRE", Dispenser3.getTimeRemaining());
+            }else if(highestValueToDisplay == 3){
+                PrintRunAuto("DISPENSING INGRE", Pump.getTimeRemaining());
+            }
         }
-        else if (runAutoFlag == true && RunAutoCommand == 1)
+        else if (runAutoFlag == true && RunAutoCommand == 2)
         {
-            PrintRunAuto("Liquid", Pump.getTimeRemaining());
+            PrintRunAuto("MIXING", Mixer.getTimeRemaining());
         }
         else if (runAutoFlag == true && RunAutoCommand == 3)
         {
-            PrintRunAuto("Caramelize", CookingTimer1.getTimeRemaining());
+            PrintRunAuto("DISPENSE TO EXTRUDE", Linear.getTimeRemaining());
         }
-        else if (runAutoFlag == true && RunAutoCommand == 4)
-        {
-            PrintRunAuto("Buko", BukoDispenser.getTimeRemaining());
-        }
-        else if (runAutoFlag == true && RunAutoCommand == 5)
-        {
-            PrintRunAuto("Cooking", CookingTimer2.getTimeRemaining());
-        }
-        else if (runAutoFlag == true && RunAutoCommand == 6)
-        {
-            PrintRunAuto("Cooling", CoolingTimer.getTimeRemaining());
-        }
-        else if (runAutoFlag == true && RunAutoCommand == 7)
-        {
-            PrintRunAuto("To Extrude", Linear.getTimeRemaining());
-        }
-        else if (runAutoFlag == true && RunAutoCommand == 8)
-        {
-            switch (cutStat)
+        else if(runAutoFlag == true && RunAutoCommand == 4){
+            switch (DispensePattyStat)
             {
-            case 0:
-                PrintRunAuto("Extruding", TimerCutterDelay.getTimeRemaining());
-                break;
             case 1:
-                PrintRunAuto("Cutting", "N/A");
+                PrintRunAuto("CONVEYOR MOVING", "N/A");
+                break;
+            case 2:
+                PrintRunAuto("EXTRUDING 1", Extruder.getTimeRemaining());
+                break;
+            case 3:
+                PrintRunAuto("EXTRUDING 2", Extruder.getTimeRemaining());
                 break;
             default:
                 break;
@@ -930,6 +893,8 @@ void printScreen()
         lcd.write(0);
         lcd.setCursor(2, 3);
         lcd.print(screens[currentScreen][1]);
+        lcd.setCursor(19, 3);
+        lcd.print(highestValueToDisplay);
         refreshScreen = false;
     }
 }
@@ -941,7 +906,7 @@ void setupJumper()
 void setup()
 {
     // Encoder Setup
-    encoder = new ClickEncoder(3, 2, 4); // Actual
+    encoder = new ClickEncoder(4, 2, 3); // Actual
     // encoder = new ClickEncoder(3, 4, 2); // TestBench
     encoder->setAccelerationEnabled(false);
     Timer1.initialize(1000);
@@ -955,7 +920,7 @@ void setup()
     lcd.createChar(2, slowChar);
     lcd.clear();
     lcd.backlight();
-    refreshScreen = true;
+    
     Serial.begin(9600);
 
      //saveSettings(); // Disable upon Initialiaze
@@ -963,6 +928,8 @@ void setup()
     DisableSteppers();
     loadSettings();
     setTimer();
+    largest();
+    refreshScreen = true;
 }
 
 void loop()
@@ -984,12 +951,16 @@ void loop()
         if (currentMillis - previousMillis >= interval)
         {
             previousMillis = currentMillis;
+            Serial.print("Current RunAutoCommand: ");
+            Serial.println(RunAutoCommand);
+            Serial.print("Current DispensePattyStat: ");
+            Serial.println(DispensePattyStat);
             refreshScreen = true;
         }
     }
 
     if (testMenuFlag == true)
     {
-        runAllTest();
+        TestRun();
     }
 }
